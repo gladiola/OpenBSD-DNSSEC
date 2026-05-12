@@ -163,7 +163,7 @@ ns2     IN  A   203.0.113.12
 ```dns
 ; /var/nsd/zones/master/gladiola.red
 $ORIGIN gladiola.red.
-$TTL 300
+$TTL 300  ; shorter TTL for frequently changing dynamic host records
 
 @   IN  SOA ns1.gladiola.red. hostmaster.gladiola.red. (
             2024010101  ; serial
@@ -368,6 +368,8 @@ DNSSEC signatures expire. A cron job that re-signs the zone before signatures ex
         /var/nsd/zones/keys/Kgladiola.codes.+013+67890.key && \
     nsd-control reload
 ```
+
+Create equivalent cron entries for `gladiola.info` and `gladiola.red` by replacing the zone name and key file names in the command above.
 
 > **Tip:** Increment the SOA serial before each re-sign to ensure secondary servers transfer the new zone. A helper script that patches the serial, re-signs, and reloads NSD is recommended for production use.
 
