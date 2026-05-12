@@ -163,7 +163,7 @@ ns2     IN  A   203.0.113.12
 ```dns
 ; /var/nsd/zones/master/gladiola.red
 $ORIGIN gladiola.red.
-$TTL 300  ; shorter TTL for frequently changing dynamic host records
+$TTL 3600
 
 @   IN  SOA ns1.gladiola.red. hostmaster.gladiola.red. (
             2024010101  ; serial
@@ -179,13 +179,13 @@ ns2     IN  A   203.0.113.32
 @       IN  A   203.0.113.31
 
 ; Dynamic host records (a-g.gladiola.red)
-a       IN  A   198.51.100.11
-b       IN  A   198.51.100.12
-c       IN  A   198.51.100.13
-d       IN  A   198.51.100.14
-e       IN  A   198.51.100.15
-f       IN  A   198.51.100.16
-g       IN  A   198.51.100.17
+a       300 IN  A   198.51.100.11
+b       300 IN  A   198.51.100.12
+c       300 IN  A   198.51.100.13
+d       300 IN  A   198.51.100.14
+e       300 IN  A   198.51.100.15
+f       300 IN  A   198.51.100.16
+g       300 IN  A   198.51.100.17
 ```
 
 Verify the zone is well-formed:
@@ -196,7 +196,7 @@ doas nsd-checkzone gladiola.info /var/nsd/zones/master/gladiola.info
 doas nsd-checkzone gladiola.red /var/nsd/zones/master/gladiola.red
 ```
 
-Expected output includes `zone gladiola.codes is ok`, `zone gladiola.info is ok`, and `zone gladiola.red is ok`.
+Expected output: `zone gladiola.codes is ok`, `zone gladiola.info is ok`, and `zone gladiola.red is ok` respectively.
 
 ---
 
