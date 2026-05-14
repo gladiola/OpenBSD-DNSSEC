@@ -105,6 +105,49 @@ doas mkdir -p /var/nsd/zones/master
 
 Create unsigned zone files for each domain. The serial number format `YYYYMMDDnn` is conventional and makes it easy to track updates.
 
+### Create Zone Records: What Goes on Which Server (ASCII)
+
+```text
+Internet Resolver
+      |
+      v
++-------------------------+
+| Registrar + Parent TLD  |
+| (.codes/.info/.red)     |
+| - NS delegation          |
+| - DS record              |
++-----------+-------------+
+            |
+            v
++------------------------------+
+| Public Authoritative NSD     |
+| (gladiola.codes/.info/.red)  |
+| - SOA, NS                    |
+| - ns1/ns2 A/AAAA             |
+| - public A/AAAA (www, vpn)   |
+| - MX -> public relays        |
+| - SPF/DKIM/DMARC TXT         |
++---------------+--------------+
+                |
+                | private transport / VPN
+                v
++------------------------------+
+| Private DNS / Internal Zone  |
+| (internal.gladiola.codes)    |
+| - mail.internal A/AAAA       |
+| - db/app/internal hosts      |
+| - internal-only cloud nodes  |
++------------------------------+
+```
+
+```text
+Record placement quick map:
+
+Registrar/TLD:      NS delegation + DS
+Public NSD server:  SOA NS A AAAA MX TXT (public only)
+Private DNS server: Internal A/AAAA/CNAME/TXT (private only)
+```
+
 ### Cloud-Hybrid DNS Architecture (Public + Private) in Zone Files
 
 When creating zone files, apply the cloud-hybrid split at record-definition time:
