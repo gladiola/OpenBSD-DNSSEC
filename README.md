@@ -104,6 +104,34 @@ doas mkdir -p /var/nsd/zones/master
 
 Create unsigned zone files for each domain. The serial number format `YYYYMMDDnn` is conventional and makes it easy to track updates.
 
+### Cloud-Hybrid DNS Architecture (Public + Private) in Zone Files
+
+When creating zone files, apply the cloud-hybrid split at record-definition time:
+
+- **Public zone (`gladiola.codes`)**: include only Internet-facing records (public NS, web, VPN, `mx1`/`mx2`, SPF/DKIM/DMARC).
+- **Private zone (`internal.gladiola.codes`)**: keep internal-only hosts and RFC1918/ULA addresses here.
+- **Do not place private IPs/internal hostnames in the public zone file.**
+
+Example private zone file layout:
+
+```dns
+; /var/nsd/zones/master/internal.gladiola.codes
+$ORIGIN internal.gladiola.codes.
+$TTL 3600
+
+@       IN  SOA ns1.internal.gladiola.codes. hostmaster.gladiola.codes. (
+            2024010101  ; serial
+            3600        ; refresh
+            900         ; retry
+            604800      ; expire
+            300 )       ; negative TTL
+
+@       IN  NS  ns1.internal.gladiola.codes.
+ns1     IN  A   10.0.0.53
+app     IN  A   10.0.10.20
+db      IN  A   10.0.20.15
+```
+
 ```sh
 doas vi /var/nsd/zones/master/gladiola.codes
 doas vi /var/nsd/zones/master/gladiola.info
