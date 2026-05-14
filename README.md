@@ -18,7 +18,8 @@ This guide walks through configuring a DNSSEC-signed authoritative DNS server on
 10. [Publish the DS Record at Your Registrar](#publish-the-ds-record-at-your-registrar)
 11. [Automate Zone Re-signing](#automate-zone-re-signing)
 12. [Verify DNSSEC](#verify-dnssec)
-13. [Troubleshooting](#troubleshooting)
+13. [Mail DNS for Cloud-Hybrid Relays (mx1/mx2)](#mail-dns-for-cloud-hybrid-relays-mx1mx2)
+14. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -122,8 +123,19 @@ ns2     IN  A   203.0.113.2
 @       IN  A       203.0.113.1
 @       IN  AAAA    2001:db8::1
 www     IN  A       203.0.113.1
-mail    IN  A       203.0.113.3
-@       IN  MX  10  mail.example.com.
+
+; Cloud-hybrid mail relays (public ingress/egress)
+mx1     IN  A       198.51.100.10
+mx1     IN  AAAA    2001:db8:100::10
+mx2     IN  A       198.51.100.20
+mx2     IN  AAAA    2001:db8:100::20
+@       IN  MX  10  mx1.example.com.
+@       IN  MX  10  mx2.example.com.
+
+; Mail authentication records used with relay egress
+@               IN  TXT "v=spf1 ip4:198.51.100.10 ip4:198.51.100.20 ip6:2001:db8:100::10 ip6:2001:db8:100::20 -all"
+mail._domainkey IN  TXT "v=DKIM1; k=rsa; p=<base64-public-key>"
+_dmarc          IN  TXT "v=DMARC1; p=none; rua=mailto:postmaster@example.com; adkim=s; aspf=s"
 ```
 
 Verify the zone is well-formed:
@@ -332,6 +344,27 @@ Both tools display the full chain of trust from the root zone down to your domai
 # Query the parent zone's nameservers for the DS record
 dig example.com DS +trace
 ```
+
+---
+
+## Mail DNS for Cloud-Hybrid Relays (mx1/mx2)
+
+To align with the cloud-hybrid architecture used in [OpenBSD-Email](https://github.com/gladiola/OpenBSD-Email), publish only the two public relays as MX targets.
+
+- `mx1.example.com` and `mx2.example.com` are Internet-facing SMTP relays.
+- The on-prem mail host stays private and is not published as an MX record.
+- SPF should authorize only relay egress IPs.
+- DKIM selector TXT should match where signing occurs (relay or on-prem).
+- Start DMARC with `p=none`, monitor reports, then tighten to `quarantine`/`reject`.
+
+Required reverse DNS (PTR) for each relay must be configured at the IP provider:
+
+```text
+10.100.51.198.in-addr.arpa.  IN PTR mx1.example.com.
+20.100.51.198.in-addr.arpa.  IN PTR mx2.example.com.
+```
+
+When DNSSEC signs the zone, these mail-policy TXT records (SPF, DKIM, DMARC) are signed like any other RRset, protecting them against in-transit tampering.
 
 ---
 
