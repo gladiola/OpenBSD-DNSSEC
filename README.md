@@ -450,12 +450,13 @@ dig gladiola.codes DS +trace
 
 ## Mail DNS for Cloud-Hybrid Relays (hopscotch/machete-ridge/tattletale)
 
-Yes. Use `hopscotch.gladiola.codes`, `machete-ridge.gladiola.codes`, and `tattletale.gladiola.codes` as the only public SMTP ingress points, and have them forward accepted mail to the internal host `mail.internal.gladiola.codes`.
+Use `hopscotch.gladiola.codes`, `machete-ridge.gladiola.codes`, and `tattletale.gladiola.codes` as the only public SMTP ingress points, and have them forward accepted mail to the internal host `mail.internal.gladiola.codes`.
 
 - `gladiola.codes` should publish all three hosts as MX targets.
 - `gladiola.info` can reuse those same three MX targets even though its mailbox destination is the same internal server.
 - The on-prem mail host stays private and is not published as an MX record.
 - The relays should look up `mail.internal.gladiola.codes` from the internal DNS server, not from public DNS.
+- MX preference values (`10`, `20`, `30`) control inbound failover order only; SPF should still authorize every relay that may send mail.
 - SPF should authorize only relay egress IPs.
 - DKIM selector TXT should match where signing occurs (relay or on-prem).
 - Start DMARC with `p=none`, monitor reports, then tighten to `quarantine`/`reject`.
@@ -482,20 +483,20 @@ For OpenBSD cloud-hybrid environments, use a split design by default:
    - Do not publish private IPs or internal-only hostnames.
 
 2. **Private internal zone (`internal.gladiola.codes`)**
-    - Serve this zone only on private networks and VPN.
-    - Keep private service names and RFC1918/ULA addresses here.
-    - Publish the real mail destination here (for example, `mail.internal.gladiola.codes`).
-    - Do not delegate or expose this zone publicly.
+   - Serve this zone only on private networks and VPN.
+   - Keep private service names and RFC1918/ULA addresses here.
+   - Publish the real mail destination here (for example, `mail.internal.gladiola.codes`).
+   - Do not delegate or expose this zone publicly.
 
 3. **Resolver behavior**
-    - Internal clients should use internal resolvers (for example, Unbound) that can resolve both public and private zones.
-    - Public cloud relays should also use the internal resolver so they can forward mail to `mail.internal.gladiola.codes`.
-    - External clients should resolve only from the public authoritative side.
+   - Internal clients should use internal resolvers (for example, Unbound) that can resolve both public and private zones.
+   - Public cloud relays should also use the internal resolver so they can forward mail to `mail.internal.gladiola.codes`.
+   - External clients should resolve only from the public authoritative side.
 
 4. **Future cloud nodes for `gladiola.red`**
-    - Keep public `gladiola.red` records minimal.
-    - Publish future ephemeral cloud nodes on an internal-only subzone such as `cloud.gladiola.red`.
-    - Use short TTLs there so new cloud servers can be added or removed without changing the public signed zone.
+   - Keep public `gladiola.red` records minimal.
+   - Publish future ephemeral cloud nodes on an internal-only subzone such as `cloud.gladiola.red`.
+   - Use short TTLs there so new cloud servers can be added or removed without changing the public signed zone.
 
 ### Example internal DNS server integration
 
