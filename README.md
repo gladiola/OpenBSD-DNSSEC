@@ -19,7 +19,8 @@ This guide walks through configuring a DNSSEC-signed authoritative DNS server on
 11. [Automate Zone Re-signing](#automate-zone-re-signing)
 12. [Verify DNSSEC](#verify-dnssec)
 13. [Mail DNS for Cloud-Hybrid Relays (mx1/mx2)](#mail-dns-for-cloud-hybrid-relays-mx1mx2)
-14. [Troubleshooting](#troubleshooting)
+14. [Cloud-Hybrid DNS Architecture (Public + Private)](#cloud-hybrid-dns-architecture-public--private)
+15. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -365,6 +366,39 @@ Required reverse DNS (PTR) for each relay must be configured at the IP provider:
 ```
 
 When DNSSEC signs the zone, these mail-policy TXT records (SPF, DKIM, DMARC) are signed like any other RRset, protecting them against in-transit tampering.
+
+---
+
+## Cloud-Hybrid DNS Architecture (Public + Private)
+
+For OpenBSD cloud-hybrid environments, use a split design by default:
+
+1. **Public authoritative zone (`example.com`)**
+   - Host this zone on Internet-facing authoritative DNS (NSD).
+   - Publish only public records (web, VPN, public NS, MX relays, SPF/DKIM/DMARC).
+   - Do not publish private IPs or internal-only hostnames.
+
+2. **Private internal zone (`internal.example.com`)**
+   - Serve this zone only on private networks and VPN.
+   - Keep private service names and RFC1918/ULA addresses here.
+   - Do not delegate or expose this zone publicly.
+
+3. **Resolver behavior**
+   - Internal clients should use internal resolvers (for example, Unbound) that can resolve both public and private zones.
+   - External clients should resolve only from the public authoritative side.
+
+### When to use true split-horizon for the same name
+
+Use true split-horizon only when you must serve the same FQDN differently inside and outside (for example, `app.example.com`):
+
+- Maintain separate internal and external authoritative data sources/views.
+- Restrict internal authoritative service access to trusted network ranges.
+- Automate record management to avoid drift between internal and external data.
+
+### Recommended default
+
+Prefer **public zone + private subdomain** over same-zone split-horizon when possible.  
+This model is simpler to operate, safer against accidental exposure, and easier to troubleshoot alongside DNSSEC.
 
 ---
 
