@@ -204,7 +204,7 @@ ns2     IN  A   203.0.113.12
 @       IN  MX  10  hopscotch.gladiola.codes.
 @       IN  MX  20  machete-ridge.gladiola.codes.
 @       IN  MX  30  tattletale.gladiola.codes.
-@       IN  TXT "v=spf1 a:hopscotch.gladiola.codes a:machete-ridge.gladiola.codes a:tattletale.gladiola.codes -all"
+@       IN  TXT "v=spf1 ip4:198.51.100.10 ip4:198.51.100.20 ip4:198.51.100.30 ip6:2001:db8:100::10 ip6:2001:db8:100::20 ip6:2001:db8:100::30 -all"
 _dmarc  IN  TXT "v=DMARC1; p=none; rua=mailto:postmaster@gladiola.info"
 ```
 
@@ -226,8 +226,8 @@ ns1     IN  A   203.0.113.31
 ns2     IN  A   203.0.113.32
 @       IN  A   203.0.113.31
 
-; Keep the public zone minimal. Future cloud nodes can be published internally
-; with low-TTL records under cloud.gladiola.red on the internal DNS server.
+; Keep the public zone minimal. Future cloud nodes are managed by the internal DNS server,
+; and can be published internally with low-TTL records under cloud.gladiola.red.
 cloud   300 IN  TXT "Managed by internal DNS"
 ```
 
@@ -508,6 +508,7 @@ server:
     access-control: 10.0.0.0/8 allow
 
 local-zone: "internal.gladiola.codes." static
+# Match the private-zone example above.
 local-data: "mail.internal.gladiola.codes. 300 IN A 10.0.30.25"
 
 stub-zone:
