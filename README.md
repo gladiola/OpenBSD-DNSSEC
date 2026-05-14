@@ -20,7 +20,8 @@ This guide walks through configuring a DNSSEC-signed authoritative DNS server on
 12. [Verify DNSSEC](#verify-dnssec)
 13. [Mail DNS for Cloud-Hybrid Relays (hopscotch/machete-ridge/tattletale)](#mail-dns-for-cloud-hybrid-relays-hopscotchmachete-ridgetattletale)
 14. [Cloud-Hybrid DNS Architecture (Public + Private)](#cloud-hybrid-dns-architecture-public--private)
-15. [Troubleshooting](#troubleshooting)
+15. [Localization and Internationalization](#localization-and-internationalization)
+16. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -330,13 +331,13 @@ doas chown _nsd:_nsd /var/nsd/zones/keys/*.private
 
 ## Sign the Zone
 
-Use `ldns-signzone` to produce a signed zone file. The `-e` flag sets the signature expiry date; 30 days (`$(date -v +30d +%Y%m%d%H%M%S)` on OpenBSD) is a common interval.
+Use `ldns-signzone` to produce a signed zone file. The `-e` flag sets the signature expiry date; 30 days is a common interval. DNSSEC RRSIG timestamps are always UTC, so use `date -u` to compute the expiry correctly regardless of the server's local timezone.
 
 ```sh
 cd /var/nsd/zones/master
 
-# Calculate expiry 30 days from now (OpenBSD date syntax)
-EXPIRY=$(date -v +30d +%Y%m%d%H%M%S)
+# Calculate expiry 30 days from now in UTC (OpenBSD date syntax)
+EXPIRY=$(date -u -v +30d +%Y%m%d%H%M%S)
 
 doas ldns-signzone \
     -n \
@@ -447,7 +448,7 @@ DNSSEC signatures expire. A cron job that re-signs the zone before signatures ex
 ```cron
 # Re-sign gladiola.codes every 20 days (signatures valid for 30 days)
 0 3 */20 * * cd /var/nsd/zones/master && \
-    EXPIRY=$(date -v +30d +%Y%m%d%H%M%S) && \
+    EXPIRY=$(date -u -v +30d +%Y%m%d%H%M%S) && \
     ldns-signzone -n -e "${EXPIRY}" -f gladiola.codes.signed \
         gladiola.codes \
         /var/nsd/zones/keys/Kgladiola.codes.+013+12345.key \
@@ -577,6 +578,58 @@ Use true split-horizon only when you must serve the same FQDN differently inside
 
 Prefer **public zone + private subdomain** over same-zone split-horizon when possible.  
 This model is simpler to operate, safer against accidental exposure, and easier to troubleshoot alongside DNSSEC.
+
+---
+
+## Localization and Internationalization
+
+### Server clock and time zone
+
+DNSSEC RRSIG records contain UTC timestamps. If the server's clock is wrong or the local time zone is used instead of UTC when calculating expiry, signatures may appear expired immediately or cover less time than intended.
+
+- **Synchronize the clock with NTP.** Enable OpenBSD's built-in `ntpd`:
+
+  ```sh
+  doas rcctl enable ntpd
+  doas rcctl start ntpd
+  ```
+
+- **Always pass `-u` to `date`** when computing expiry timestamps. The signing examples in this guide already do this (`date -u -v +30d ...`), but verify any custom scripts use the same flag.
+
+- The server's `/etc/localtime` does not affect `ldns-signzone` or NSD directly, but it does affect `date` output when the `-u` flag is omitted.
+
+### Internationalized domain names (IDN / IDNA2008)
+
+If your domain name contains non-ASCII characters (for example, accented letters or CJK characters), the DNS protocol requires the **ACE / punycode** form everywhere — in zone files, in `ldns-keygen` arguments, and in NSD configuration.
+
+Convert an IDN to its punycode form before use:
+
+```sh
+# Example: münchen.de → xn--mnchen-3ya.de
+python3 -c "import encodings.idna; print(encodings.idna.ToACE('münchen.de').decode())"
+```
+
+Use the ACE form consistently:
+
+```sh
+# Correct: use punycode in ldns-keygen
+doas ldns-keygen -a ECDSAP256SHA256 -b 256 -k xn--mnchen-3ya.de
+
+# Correct: zone file $ORIGIN uses ACE form
+# $ORIGIN xn--mnchen-3ya.de.
+```
+
+Zone file `TXT` records (SPF, DKIM, DMARC) may contain UTF-8 strings in their values, but the record owner name must remain ASCII or ACE-encoded.
+
+### Locale-neutral scripting
+
+When parsing output from `dig`, `nsd-control`, or similar tools in shell scripts, set `LC_ALL=C` to avoid locale-dependent formatting:
+
+```sh
+LC_ALL=C dig gladiola.codes DNSKEY +dnssec
+```
+
+This is especially important in scripts that grep for specific keywords or parse field positions, since some locales change number formatting or sort order.
 
 ---
 
