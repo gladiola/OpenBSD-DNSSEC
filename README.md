@@ -18,7 +18,7 @@ This guide walks through configuring a DNSSEC-signed authoritative DNS server on
 10. [Publish the DS Record at Your Registrar](#publish-the-ds-record-at-your-registrar)
 11. [Automate Zone Re-signing](#automate-zone-re-signing)
 12. [Verify DNSSEC](#verify-dnssec)
-13. [Mail DNS for Cloud-Hybrid Relays (mx1/mx2)](#mail-dns-for-cloud-hybrid-relays-mx1mx2)
+13. [Mail DNS for Cloud-Hybrid Relays (hopscotch/machete-ridge/tattletale)](#mail-dns-for-cloud-hybrid-relays-hopscotchmachete-ridgetattletale)
 14. [Cloud-Hybrid DNS Architecture (Public + Private)](#cloud-hybrid-dns-architecture-public--private)
 15. [Troubleshooting](#troubleshooting)
 
@@ -108,8 +108,8 @@ Create unsigned zone files for each domain. The serial number format `YYYYMMDDnn
 
 When creating zone files, apply the cloud-hybrid split at record-definition time:
 
-- **Public zone (`gladiola.codes`)**: include only Internet-facing records (public NS, web, VPN, `mx1`/`mx2`, SPF/DKIM/DMARC).
-- **Private zone (`internal.gladiola.codes`)**: keep internal-only hosts and RFC1918/ULA addresses here.
+- **Public zone (`gladiola.codes`)**: include only Internet-facing records (public NS, web, VPN, `hopscotch`/`machete-ridge`/`tattletale`, SPF/DKIM/DMARC).
+- **Private zone (`internal.gladiola.codes`)**: keep internal-only hosts, RFC1918/ULA addresses, and the real mail destination here.
 - **Do not place private IPs/internal hostnames in the public zone file.**
 
 Example private zone file layout:
@@ -130,6 +130,8 @@ $TTL 3600
 ns1     IN  A   10.0.0.53
 app     IN  A   10.0.10.20
 db      IN  A   10.0.20.15
+mail    IN  A   10.0.30.25
+smtp    IN  CNAME mail
 ```
 
 ```sh
@@ -164,22 +166,22 @@ ns2     IN  A   203.0.113.2
 www     IN  A       203.0.113.1
 
 ; Cloud-hybrid mail relays (public ingress/egress)
-mx1     IN  A       198.51.100.10
-mx1     IN  AAAA    2001:db8:100::10
-mx2     IN  A       198.51.100.20
-mx2     IN  AAAA    2001:db8:100::20
-@       IN  MX  10  mx1.gladiola.codes.
-@       IN  MX  10  mx2.gladiola.codes.
+; These public relays accept Internet SMTP, then forward to mail.internal.gladiola.codes
+; over your VPN/private transport using the internal DNS server.
+hopscotch       IN  A       198.51.100.10
+hopscotch       IN  AAAA    2001:db8:100::10
+machete-ridge   IN  A       198.51.100.20
+machete-ridge   IN  AAAA    2001:db8:100::20
+tattletale      IN  A       198.51.100.30
+tattletale      IN  AAAA    2001:db8:100::30
+@               IN  MX  10  hopscotch.gladiola.codes.
+@               IN  MX  20  machete-ridge.gladiola.codes.
+@               IN  MX  30  tattletale.gladiola.codes.
 
 ; Mail authentication records used with relay egress
-@               IN  TXT "v=spf1 ip4:198.51.100.10 ip4:198.51.100.20 ip6:2001:db8:100::10 ip6:2001:db8:100::20 -all"
+@               IN  TXT "v=spf1 ip4:198.51.100.10 ip4:198.51.100.20 ip4:198.51.100.30 ip6:2001:db8:100::10 ip6:2001:db8:100::20 ip6:2001:db8:100::30 -all"
 mail._domainkey IN  TXT "v=DKIM1; k=rsa; p=<base64-public-key>"
 _dmarc          IN  TXT "v=DMARC1; p=none; rua=mailto:postmaster@gladiola.codes; adkim=s; aspf=s"
-
-; Requested subdomains
-machete-ridge   IN  A   203.0.113.21
-hopscotch       IN  A   203.0.113.22
-tattletale      IN  A   203.0.113.23
 ```
 
 ```dns
@@ -199,6 +201,11 @@ $TTL 3600
 ns1     IN  A   203.0.113.11
 ns2     IN  A   203.0.113.12
 @       IN  A   203.0.113.11
+@       IN  MX  10  hopscotch.gladiola.codes.
+@       IN  MX  20  machete-ridge.gladiola.codes.
+@       IN  MX  30  tattletale.gladiola.codes.
+@       IN  TXT "v=spf1 a:hopscotch.gladiola.codes a:machete-ridge.gladiola.codes a:tattletale.gladiola.codes -all"
+_dmarc  IN  TXT "v=DMARC1; p=none; rua=mailto:postmaster@gladiola.info"
 ```
 
 ```dns
@@ -219,14 +226,9 @@ ns1     IN  A   203.0.113.31
 ns2     IN  A   203.0.113.32
 @       IN  A   203.0.113.31
 
-; Dynamic host records (a-g.gladiola.red)
-a       300 IN  A   198.51.100.11
-b       300 IN  A   198.51.100.12
-c       300 IN  A   198.51.100.13
-d       300 IN  A   198.51.100.14
-e       300 IN  A   198.51.100.15
-f       300 IN  A   198.51.100.16
-g       300 IN  A   198.51.100.17
+; Keep the public zone minimal. Future cloud nodes can be published internally
+; with low-TTL records under cloud.gladiola.red on the internal DNS server.
+cloud   300 IN  TXT "Managed by internal DNS"
 ```
 
 Verify the zone is well-formed:
@@ -446,12 +448,14 @@ dig gladiola.codes DS +trace
 
 ---
 
-## Mail DNS for Cloud-Hybrid Relays (mx1/mx2)
+## Mail DNS for Cloud-Hybrid Relays (hopscotch/machete-ridge/tattletale)
 
-To align with the cloud-hybrid architecture used in [OpenBSD-Email](https://github.com/gladiola/OpenBSD-Email), publish only the two public relays as MX targets.
+Yes. Use `hopscotch.gladiola.codes`, `machete-ridge.gladiola.codes`, and `tattletale.gladiola.codes` as the only public SMTP ingress points, and have them forward accepted mail to the internal host `mail.internal.gladiola.codes`.
 
-- `mx1.gladiola.codes` and `mx2.gladiola.codes` are Internet-facing SMTP relays.
+- `gladiola.codes` should publish all three hosts as MX targets.
+- `gladiola.info` can reuse those same three MX targets even though its mailbox destination is the same internal server.
 - The on-prem mail host stays private and is not published as an MX record.
+- The relays should look up `mail.internal.gladiola.codes` from the internal DNS server, not from public DNS.
 - SPF should authorize only relay egress IPs.
 - DKIM selector TXT should match where signing occurs (relay or on-prem).
 - Start DMARC with `p=none`, monitor reports, then tighten to `quarantine`/`reject`.
@@ -459,8 +463,9 @@ To align with the cloud-hybrid architecture used in [OpenBSD-Email](https://gith
 Required reverse DNS (PTR) for each relay must be configured at the IP provider:
 
 ```text
-10.100.51.198.in-addr.arpa.  IN PTR mx1.gladiola.codes.
-20.100.51.198.in-addr.arpa.  IN PTR mx2.gladiola.codes.
+10.100.51.198.in-addr.arpa.  IN PTR hopscotch.gladiola.codes.
+20.100.51.198.in-addr.arpa.  IN PTR machete-ridge.gladiola.codes.
+30.100.51.198.in-addr.arpa.  IN PTR tattletale.gladiola.codes.
 ```
 
 When DNSSEC signs the zone, these mail-policy TXT records (SPF, DKIM, DMARC) are signed like any other RRset, protecting them against in-transit tampering.
@@ -477,13 +482,43 @@ For OpenBSD cloud-hybrid environments, use a split design by default:
    - Do not publish private IPs or internal-only hostnames.
 
 2. **Private internal zone (`internal.gladiola.codes`)**
-   - Serve this zone only on private networks and VPN.
-   - Keep private service names and RFC1918/ULA addresses here.
-   - Do not delegate or expose this zone publicly.
+    - Serve this zone only on private networks and VPN.
+    - Keep private service names and RFC1918/ULA addresses here.
+    - Publish the real mail destination here (for example, `mail.internal.gladiola.codes`).
+    - Do not delegate or expose this zone publicly.
 
 3. **Resolver behavior**
-   - Internal clients should use internal resolvers (for example, Unbound) that can resolve both public and private zones.
-   - External clients should resolve only from the public authoritative side.
+    - Internal clients should use internal resolvers (for example, Unbound) that can resolve both public and private zones.
+    - Public cloud relays should also use the internal resolver so they can forward mail to `mail.internal.gladiola.codes`.
+    - External clients should resolve only from the public authoritative side.
+
+4. **Future cloud nodes for `gladiola.red`**
+    - Keep public `gladiola.red` records minimal.
+    - Publish future ephemeral cloud nodes on an internal-only subzone such as `cloud.gladiola.red`.
+    - Use short TTLs there so new cloud servers can be added or removed without changing the public signed zone.
+
+### Example internal DNS server integration
+
+An internal Unbound resolver can serve the private zones directly or forward them to an internal authoritative source:
+
+```conf
+# /var/unbound/etc/unbound.conf.local
+server:
+    access-control: 10.0.0.0/8 allow
+
+local-zone: "internal.gladiola.codes." static
+local-data: "mail.internal.gladiola.codes. 300 IN A 10.0.30.25"
+
+stub-zone:
+    name: "cloud.gladiola.red."
+    stub-addr: 10.0.0.53
+```
+
+With this pattern:
+
+- Public DNS for `gladiola.codes` and `gladiola.info` stays DNSSEC-signed and Internet-safe.
+- The three public cloud relays can still find the internal delivery target through the private resolver.
+- `cloud.gladiola.red` can track any future spun-up cloud server without constantly re-signing the public zone.
 
 ### When to use true split-horizon for the same name
 
