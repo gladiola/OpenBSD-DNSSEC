@@ -10,7 +10,7 @@ This guide walks through configuring a DNSSEC-signed authoritative DNS server on
 2. [Prerequisites](#prerequisites)
 3. [Install Packages](#install-packages)
 4. [Configure NSD](#configure-nsd)
-5. [Create a Zone File](#create-a-zone-file)
+5. [Create Zone Files](#create-zone-files)
 6. [Generate DNSSEC Keys](#generate-dnssec-keys)
 7. [Sign the Zone](#sign-the-zone)
 8. [Configure NSD to Serve the Signed Zone](#configure-nsd-to-serve-the-signed-zone)
@@ -39,7 +39,7 @@ DNSSEC (Domain Name System Security Extensions) adds cryptographic signatures to
 
 - OpenBSD 7.4 or later (commands work on earlier releases with minor adjustments).
 - Root or `doas` access.
-- A registered domain name (e.g., `example.com`).
+- Registered domain names (e.g., `gladiola.codes`, `gladiola.info`, and `gladiola.red`).
 - Your server's public IP addresses to use as authoritative nameservers.
 - Port 53 (UDP and TCP) open in `pf`.
 
@@ -80,8 +80,16 @@ server:
     pidfile: "/var/nsd/run/nsd.pid"
 
 zone:
-    name: "example.com"
-    zonefile: "master/example.com.signed"
+    name: "gladiola.codes"
+    zonefile: "master/gladiola.codes.signed"
+
+zone:
+    name: "gladiola.info"
+    zonefile: "master/gladiola.info.signed"
+
+zone:
+    name: "gladiola.red"
+    zonefile: "master/gladiola.red.signed"
 ```
 
 Paths inside the `zonesdir` are relative to `/var/nsd/zones/`. Create the directory for master zones:
@@ -92,20 +100,22 @@ doas mkdir -p /var/nsd/zones/master
 
 ---
 
-## Create a Zone File
+## Create Zone Files
 
-Create the unsigned zone file. The serial number format `YYYYMMDDnn` is conventional and makes it easy to track updates.
+Create unsigned zone files for each domain. The serial number format `YYYYMMDDnn` is conventional and makes it easy to track updates.
 
 ```sh
-doas vi /var/nsd/zones/master/example.com
+doas vi /var/nsd/zones/master/gladiola.codes
+doas vi /var/nsd/zones/master/gladiola.info
+doas vi /var/nsd/zones/master/gladiola.red
 ```
 
 ```dns
-; /var/nsd/zones/master/example.com
-$ORIGIN example.com.
+; /var/nsd/zones/master/gladiola.codes
+$ORIGIN gladiola.codes.
 $TTL 3600
 
-@   IN  SOA ns1.example.com. hostmaster.example.com. (
+@   IN  SOA ns1.gladiola.codes. hostmaster.gladiola.codes. (
             2024010101  ; serial
             3600        ; refresh
             900         ; retry
@@ -113,14 +123,14 @@ $TTL 3600
             300 )       ; negative TTL
 
 ; Name servers
-@       IN  NS  ns1.example.com.
-@       IN  NS  ns2.example.com.
+@               IN  NS  ns1.gladiola.codes.
+@               IN  NS  ns2.gladiola.codes.
 
 ; A records for the name servers themselves
 ns1     IN  A   203.0.113.1
 ns2     IN  A   203.0.113.2
 
-; Other records
+; Zone apex and service records
 @       IN  A       203.0.113.1
 @       IN  AAAA    2001:db8::1
 www     IN  A       203.0.113.1
@@ -130,22 +140,76 @@ mx1     IN  A       198.51.100.10
 mx1     IN  AAAA    2001:db8:100::10
 mx2     IN  A       198.51.100.20
 mx2     IN  AAAA    2001:db8:100::20
-@       IN  MX  10  mx1.example.com.
-@       IN  MX  10  mx2.example.com.
+@       IN  MX  10  mx1.gladiola.codes.
+@       IN  MX  10  mx2.gladiola.codes.
 
 ; Mail authentication records used with relay egress
 @               IN  TXT "v=spf1 ip4:198.51.100.10 ip4:198.51.100.20 ip6:2001:db8:100::10 ip6:2001:db8:100::20 -all"
 mail._domainkey IN  TXT "v=DKIM1; k=rsa; p=<base64-public-key>"
-_dmarc          IN  TXT "v=DMARC1; p=none; rua=mailto:postmaster@example.com; adkim=s; aspf=s"
+_dmarc          IN  TXT "v=DMARC1; p=none; rua=mailto:postmaster@gladiola.codes; adkim=s; aspf=s"
+
+; Requested subdomains
+machete-ridge   IN  A   203.0.113.21
+hopscotch       IN  A   203.0.113.22
+tattletale      IN  A   203.0.113.23
+```
+
+```dns
+; /var/nsd/zones/master/gladiola.info
+$ORIGIN gladiola.info.
+$TTL 3600
+
+@   IN  SOA ns1.gladiola.info. hostmaster.gladiola.info. (
+            2024010101  ; serial
+            3600        ; refresh
+            900         ; retry
+            604800      ; expire
+            300 )       ; negative TTL
+
+@       IN  NS  ns1.gladiola.info.
+@       IN  NS  ns2.gladiola.info.
+ns1     IN  A   203.0.113.11
+ns2     IN  A   203.0.113.12
+@       IN  A   203.0.113.11
+```
+
+```dns
+; /var/nsd/zones/master/gladiola.red
+$ORIGIN gladiola.red.
+$TTL 3600
+
+@   IN  SOA ns1.gladiola.red. hostmaster.gladiola.red. (
+            2024010101  ; serial
+            3600        ; refresh
+            900         ; retry
+            604800      ; expire
+            300 )       ; negative TTL
+
+@       IN  NS  ns1.gladiola.red.
+@       IN  NS  ns2.gladiola.red.
+ns1     IN  A   203.0.113.31
+ns2     IN  A   203.0.113.32
+@       IN  A   203.0.113.31
+
+; Dynamic host records (a-g.gladiola.red)
+a       300 IN  A   198.51.100.11
+b       300 IN  A   198.51.100.12
+c       300 IN  A   198.51.100.13
+d       300 IN  A   198.51.100.14
+e       300 IN  A   198.51.100.15
+f       300 IN  A   198.51.100.16
+g       300 IN  A   198.51.100.17
 ```
 
 Verify the zone is well-formed:
 
 ```sh
-doas nsd-checkzone example.com /var/nsd/zones/master/example.com
+doas nsd-checkzone gladiola.codes /var/nsd/zones/master/gladiola.codes
+doas nsd-checkzone gladiola.info /var/nsd/zones/master/gladiola.info
+doas nsd-checkzone gladiola.red /var/nsd/zones/master/gladiola.red
 ```
 
-Expected output: `zone example.com is ok`
+Expected output: `zone gladiola.codes is ok`, `zone gladiola.info is ok`, and `zone gladiola.red is ok` respectively.
 
 ---
 
@@ -165,19 +229,21 @@ doas mkdir -p /var/nsd/zones/keys
 cd /var/nsd/zones/keys
 
 # Generate the KSK (-k flag marks it as a Key Signing Key)
-doas ldns-keygen -a ECDSAP256SHA256 -b 256 -k example.com
+doas ldns-keygen -a ECDSAP256SHA256 -b 256 -k gladiola.codes
 
 # Generate the ZSK
-doas ldns-keygen -a ECDSAP256SHA256 -b 256 example.com
+doas ldns-keygen -a ECDSAP256SHA256 -b 256 gladiola.codes
 ```
+
+Repeat the same two commands for `gladiola.info` and `gladiola.red` if you want those zones signed as well.
 
 Each `ldns-keygen` call produces two files: a `.key` (public key in DNS zone format) and a `.private` (private key). List them to confirm:
 
 ```sh
 ls /var/nsd/zones/keys/
 # Example output:
-# Kexample.com.+013+12345.key     Kexample.com.+013+12345.private   <- KSK
-# Kexample.com.+013+67890.key     Kexample.com.+013+67890.private   <- ZSK
+# Kgladiola.codes.+013+12345.key     Kgladiola.codes.+013+12345.private   <- KSK
+# Kgladiola.codes.+013+67890.key     Kgladiola.codes.+013+67890.private   <- ZSK
 ```
 
 **Protect the private keys:**
@@ -202,11 +268,13 @@ EXPIRY=$(date -v +30d +%Y%m%d%H%M%S)
 doas ldns-signzone \
     -n \
     -e "${EXPIRY}" \
-    -f example.com.signed \
-    example.com \
-    /var/nsd/zones/keys/Kexample.com.+013+12345.key \
-    /var/nsd/zones/keys/Kexample.com.+013+67890.key
+    -f gladiola.codes.signed \
+    gladiola.codes \
+    /var/nsd/zones/keys/Kgladiola.codes.+013+12345.key \
+    /var/nsd/zones/keys/Kgladiola.codes.+013+67890.key
 ```
+
+Repeat this signing pattern for `gladiola.info` and `gladiola.red`, adjusting zone names and key filenames.
 
 **Flag reference:**
 
@@ -221,14 +289,14 @@ The final two arguments are the KSK and ZSK public key files (order does not mat
 Verify the signed zone:
 
 ```sh
-doas nsd-checkzone example.com /var/nsd/zones/master/example.com.signed
+doas nsd-checkzone gladiola.codes /var/nsd/zones/master/gladiola.codes.signed
 ```
 
 ---
 
 ## Configure NSD to Serve the Signed Zone
 
-The `nsd.conf` snippet shown earlier already points at `example.com.signed`. Reload NSD to pick up the new file:
+The `nsd.conf` snippet shown earlier points to `gladiola.codes.signed`, `gladiola.info.signed`, and `gladiola.red.signed`. Reload NSD to pick up new signed files:
 
 ```sh
 doas nsd-control reload
@@ -273,7 +341,7 @@ The **DS (Delegation Signer) record** links your zone's DNSSEC to its parent zon
 Extract the DS record from the KSK:
 
 ```sh
-doas ldns-key2ds -n -2 /var/nsd/zones/keys/Kexample.com.+013+12345.key
+doas ldns-key2ds -n -2 /var/nsd/zones/keys/Kgladiola.codes.+013+12345.key
 ```
 
 **Flag reference:**
@@ -286,7 +354,7 @@ doas ldns-key2ds -n -2 /var/nsd/zones/keys/Kexample.com.+013+12345.key
 Example output:
 
 ```
-example.com.	3600	IN	DS	12345 13 2 a1b2c3d4e5f6...
+gladiola.codes.	3600	IN	DS	12345 13 2 a1b2c3d4e5f6...
 ```
 
 Log in to your registrar and enter the DS record details:
@@ -304,15 +372,17 @@ Propagation typically takes minutes to a few hours depending on the registrar an
 DNSSEC signatures expire. A cron job that re-signs the zone before signatures expire prevents validation failures. Add the following to root's crontab (`doas crontab -e`):
 
 ```cron
-# Re-sign example.com every 20 days (signatures valid for 30 days)
+# Re-sign gladiola.codes every 20 days (signatures valid for 30 days)
 0 3 */20 * * cd /var/nsd/zones/master && \
     EXPIRY=$(date -v +30d +%Y%m%d%H%M%S) && \
-    ldns-signzone -n -e "${EXPIRY}" -f example.com.signed \
-        example.com \
-        /var/nsd/zones/keys/Kexample.com.+013+12345.key \
-        /var/nsd/zones/keys/Kexample.com.+013+67890.key && \
+    ldns-signzone -n -e "${EXPIRY}" -f gladiola.codes.signed \
+        gladiola.codes \
+        /var/nsd/zones/keys/Kgladiola.codes.+013+12345.key \
+        /var/nsd/zones/keys/Kgladiola.codes.+013+67890.key && \
     nsd-control reload
 ```
+
+Create equivalent cron entries for `gladiola.info` and `gladiola.red` by replacing the zone name and key file names in the command above.
 
 > **Tip:** Increment the SOA serial before each re-sign to ensure secondary servers transfer the new zone. A helper script that patches the serial, re-signs, and reloads NSD is recommended for production use.
 
@@ -324,10 +394,10 @@ DNSSEC signatures expire. A cron job that re-signs the zone before signatures ex
 
 ```sh
 # Check that DNSKEY records are present
-dig @203.0.113.1 example.com DNSKEY +dnssec
+dig @203.0.113.1 gladiola.codes DNSKEY +dnssec
 
 # Check that RRSIG records are returned for A records
-dig @203.0.113.1 example.com A +dnssec
+dig @203.0.113.1 gladiola.codes A +dnssec
 ```
 
 Look for the `ad` (Authenticated Data) flag in the response header, and `RRSIG` records alongside each RRset.
@@ -343,7 +413,7 @@ Both tools display the full chain of trust from the root zone down to your domai
 
 ```sh
 # Query the parent zone's nameservers for the DS record
-dig example.com DS +trace
+dig gladiola.codes DS +trace
 ```
 
 ---
@@ -352,7 +422,7 @@ dig example.com DS +trace
 
 To align with the cloud-hybrid architecture used in [OpenBSD-Email](https://github.com/gladiola/OpenBSD-Email), publish only the two public relays as MX targets.
 
-- `mx1.example.com` and `mx2.example.com` are Internet-facing SMTP relays.
+- `mx1.gladiola.codes` and `mx2.gladiola.codes` are Internet-facing SMTP relays.
 - The on-prem mail host stays private and is not published as an MX record.
 - SPF should authorize only relay egress IPs.
 - DKIM selector TXT should match where signing occurs (relay or on-prem).
@@ -361,8 +431,8 @@ To align with the cloud-hybrid architecture used in [OpenBSD-Email](https://gith
 Required reverse DNS (PTR) for each relay must be configured at the IP provider:
 
 ```text
-10.100.51.198.in-addr.arpa.  IN PTR mx1.example.com.
-20.100.51.198.in-addr.arpa.  IN PTR mx2.example.com.
+10.100.51.198.in-addr.arpa.  IN PTR mx1.gladiola.codes.
+20.100.51.198.in-addr.arpa.  IN PTR mx2.gladiola.codes.
 ```
 
 When DNSSEC signs the zone, these mail-policy TXT records (SPF, DKIM, DMARC) are signed like any other RRset, protecting them against in-transit tampering.
@@ -373,12 +443,12 @@ When DNSSEC signs the zone, these mail-policy TXT records (SPF, DKIM, DMARC) are
 
 For OpenBSD cloud-hybrid environments, use a split design by default:
 
-1. **Public authoritative zone (`example.com`)**
+1. **Public authoritative zone (`gladiola.codes`)**
    - Host this zone on Internet-facing authoritative DNS (NSD).
    - Publish only public records (web, VPN, public NS, MX relays, SPF/DKIM/DMARC).
    - Do not publish private IPs or internal-only hostnames.
 
-2. **Private internal zone (`internal.example.com`)**
+2. **Private internal zone (`internal.gladiola.codes`)**
    - Serve this zone only on private networks and VPN.
    - Keep private service names and RFC1918/ULA addresses here.
    - Do not delegate or expose this zone publicly.
@@ -389,7 +459,7 @@ For OpenBSD cloud-hybrid environments, use a split design by default:
 
 ### When to use true split-horizon for the same name
 
-Use true split-horizon only when you must serve the same FQDN differently inside and outside (for example, `app.example.com`):
+Use true split-horizon only when you must serve the same FQDN differently inside and outside (for example, `app.gladiola.codes`):
 
 - Maintain separate internal and external authoritative data sources/views.
 - Restrict internal authoritative service access to trusted network ranges.
