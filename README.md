@@ -20,8 +20,7 @@ This guide walks through configuring a DNSSEC-signed authoritative DNS server on
 12. [Verify DNSSEC](#verify-dnssec)
 13. [Mail DNS for Cloud-Hybrid Relays (hopscotch/machete-ridge/tattletale)](#mail-dns-for-cloud-hybrid-relays-hopscotchmachete-ridgetattletale)
 14. [Cloud-Hybrid DNS Architecture (Public + Private)](#cloud-hybrid-dns-architecture-public--private)
-15. [Zone Record Placement Diagrams (Are We Putting Records in the Right Place?)](#zone-record-placement-diagrams-are-we-putting-records-in-the-right-place)
-16. [Troubleshooting](#troubleshooting)
+15. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -578,65 +577,6 @@ Use true split-horizon only when you must serve the same FQDN differently inside
 
 Prefer **public zone + private subdomain** over same-zone split-horizon when possible.  
 This model is simpler to operate, safer against accidental exposure, and easier to troubleshoot alongside DNSSEC.
-
----
-
-## Zone Record Placement Diagrams (Are We Putting Records in the Right Place?)
-
-Use these diagrams to confirm the public Internet can discover your authoritative servers and mail entry points, while private destinations remain private.
-
-### 1) Delegation and trust chain (where Internet discovery happens)
-
-```mermaid
-flowchart TD
-    R[Recursive resolver on the Internet]
-    TLD[Parent zone/TLD\n(.codes/.info/.red)]
-    REG[Registrar]
-    AUTH[Your authoritative zone\n(gladiola.codes)]
-    NS[ns1/ns2 A/AAAA in child zone]
-    MX[Public MX relays\nhopscotch/machete-ridge/tattletale]
-    PRIV[mail.internal.gladiola.codes\n(private only)]
-
-    R --> TLD
-    TLD -->|NS delegation (+ glue when in-bailiwick)| AUTH
-    REG -->|Publishes DS from your KSK| TLD
-    AUTH --> NS
-    AUTH --> MX
-    MX -->|Private transport/VPN| PRIV
-```
-
-Placement check:
-- **Parent zone/TLD (via registrar):** `NS` delegation and `DS` for DNSSEC chain of trust.
-- **Public child zone (`gladiola.codes`/`gladiola.info`):** authoritative `SOA/NS`, nameserver `A/AAAA`, public service records (`A/AAAA`, `MX`, SPF/DKIM/DMARC).
-- **Private zone (`internal.gladiola.codes`):** internal-only targets such as `mail.internal.gladiola.codes`.
-
-### 2) Public vs private record placement map
-
-```mermaid
-flowchart LR
-    subgraph PUB[Public authoritative DNS (Internet-visible)]
-        PNS[NS + SOA]
-        PGLUE[ns1/ns2 A/AAAA]
-        PSVC[www/VPN/public apps A/AAAA]
-        PMX[MX -> public relays]
-        PMAIL[SPF, DKIM, DMARC TXT]
-    end
-
-    subgraph PRIVZ[Private DNS only (VPN/LAN)]
-        IMAIL[mail.internal.gladiola.codes A/AAAA]
-        IHOSTS[db/app/internal hostnames]
-        IEPH[cloud.gladiola.red internal-only nodes]
-    end
-```
-
-Quick “right place?” checklist:
-- `dig +short NS gladiola.codes` returns your public authoritative nameservers.
-- `dig +trace gladiola.codes` reaches your authoritative servers without delegation breaks.
-- `dig gladiola.codes DS +trace` shows the DS at the parent after publication.
-- `dig MX gladiola.codes` returns only public relay hostnames (not internal hosts).
-- `dig mail.internal.gladiola.codes` from public resolvers returns no public answer.
-
-If these checks pass, your records are placed correctly for Internet discovery and private service isolation.
 
 ---
 
